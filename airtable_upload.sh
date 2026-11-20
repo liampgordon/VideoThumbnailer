@@ -6,6 +6,7 @@
 # Shortcut for stills): same webhook, same form fields, same log file. The job
 # code comes from the nearest parent folder named like 12345_Something.
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"   # ffprobe
 WEBHOOK="https://urbanstudionyc.app.n8n.cloud/webhook/airtable-thumb-upload"
 LOG_FILE="${HOME}/.airtable-thumbnails.log"
 
@@ -31,6 +32,17 @@ find_job() {
   return 1
 }
 
+# Find the video a thumbnail was made from: <dir>/thumbnails/<name>.jpg -> <dir>/<name>.<ext>
+find_video() {
+  local jpg="$1" stem dir ext
+  stem="$(basename "${jpg%.*}")"
+  dir="$(dirname "$(dirname "$jpg")")"
+  for ext in mp4 mov m4v mxf mkv avi MP4 MOV M4V MXF; do
+    [[ -f "$dir/$stem.$ext" ]] && { printf '%s\n' "$dir/$stem.$ext"; return 0; }
+  done
+  return 1
+}
+
 TOTAL=0; OK=0; FAIL=0; FAILED=""; LAST_JOB=""
 RESP="$(mktemp -t airtable_upload)"
 
@@ -48,10 +60,18 @@ for jpg in "$@"; do
     FAIL=$((FAIL+1)); FAILED="$FAILED $name(no-job)"; continue
   fi
   JOB_CODE="${jf%%|*}"; JOB_FOLDER="${jf#*|}"; LAST_JOB="$JOB_CODE"
-  log "POST $name -> job $JOB_CODE ($JOB_FOLDER)"
+  # Runtime: thumbnails/<name>.jpg comes from ../<name>.<video ext>
+  DURATION=""
+  if video="$(find_video "$jpg")"; then
+    DURATION="$(ffprobe -v error -show_entries format=duration \
+      -of default=noprint_wrappers=1:nokey=1 "$video" 2>/dev/null)"
+    [[ "$DURATION" =~ ^[0-9]+(\.[0-9]+)?$ ]] || DURATION=""
+  fi
+  log "POST $name -> job $JOB_CODE ($JOB_FOLDER), duration ${DURATION:-unknown}s"
 
   code="$(curl -sS -o "$RESP" -w '%{http_code}' --retry 2 --retry-delay 1 \
     -F "file=@${jpg};type=image/jpeg" \
+    -F "duration=${DURATION}" \
     -F "job_code=${JOB_CODE}" \
     -F "job_folder=${JOB_FOLDER}" \
     -F "filename=${name}" \
