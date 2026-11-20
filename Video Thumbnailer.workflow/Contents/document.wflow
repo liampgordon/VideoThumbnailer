@@ -59,25 +59,28 @@
 				<key>ActionParameters</key>
 				<dict>
 					<key>COMMAND_STRING</key>
-					<string>  #!/bin/bash
-  export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-
-  # Log to a file for debugging
-  exec &gt; /tmp/automator_debug.log 2&gt;&amp;1
-
-  echo "Starting script..."
-  echo "Arguments: $@"
-  echo "Python path: $(which python3)"
-  echo "FFmpeg path: $(which ffmpeg)"
-
-  cd "$HOME/Code/VideoThumbnailer" || exit 1
-
-  for f in "$@"; do
-      echo "Processing: $f"
-      /usr/bin/python3 video_thumbnailer.py "$f"
-  done
-
-  echo "Script completed"</string>
+					<string>#!/bin/bash
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# Log to a file for debugging
+exec &gt; /tmp/automator_debug.log 2&gt;&amp;1
+echo "Starting script..."
+echo "Arguments: $@"
+echo "Python path: $(which python3)"
+echo "FFmpeg path: $(which ffmpeg)"
+cd "$HOME/Code/VideoThumbnailer" || exit 1
+thumbs=()
+for f in "$@"; do
+    echo "Processing: $f"
+    if /usr/bin/python3 video_thumbnailer.py "$f"; then
+        n="$(basename "$f")"
+        thumbs+=("$(dirname "$f")/thumbnails/${n%.*}.jpg")
+    fi
+done
+if [ ${#thumbs[@]} -gt 0 ]; then
+    echo "Uploading ${#thumbs[@]} thumbnail(s) to Airtable..."
+    ./airtable_upload.sh "${thumbs[@]}"
+fi
+echo "Script completed"</string>
 					<key>CheckedForUserDefaultShell</key>
 					<true/>
 					<key>inputMethod</key>

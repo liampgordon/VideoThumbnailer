@@ -6,6 +6,22 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Where in the video to grab the thumbnail, as a fraction of its length.
+SEEK_FRACTION = 1 / 3
+
+
+def get_duration(video_path):
+    """Return the video's duration in seconds via ffprobe, or None."""
+    try:
+        out = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+             '-of', 'default=noprint_wrappers=1:nokey=1', str(video_path)],
+            capture_output=True, text=True, check=True
+        ).stdout.strip()
+        return float(out)
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+        return None
+
 
 def generate_thumbnail(video_path, output_dir=None):
     """
@@ -35,12 +51,21 @@ def generate_thumbnail(video_path, output_dir=None):
         thumbnails_dir.mkdir(exist_ok=True)
         thumbnail_path = thumbnails_dir / f"{video_path.stem}.jpg"
     
+    # Seek about a third of the way in so we skip slates / title cards that
+    # many cuts share at the head. -ss before -i is a fast keyframe seek.
+    seek = []
+    duration = get_duration(video_path)
+    if duration and duration > 1:
+        seek = ['-ss', f"{duration * SEEK_FRACTION:.3f}"]
+
     # Build ffmpeg command
-    # -vf "thumbnail,scale=720:-1" applies thumbnail filter then scales to 720px wide
+    # -vf "thumbnail,scale=720:-1" picks the most representative frame from the
+    # next ~100 frames, then scales to 720px wide
     # -frames:v 1 outputs only one frame
     # -y overwrites existing files
     cmd = [
         'ffmpeg',
+        *seek,
         '-i', str(video_path),
         '-vf', 'thumbnail,scale=720:-1',
         '-frames:v', '1',
