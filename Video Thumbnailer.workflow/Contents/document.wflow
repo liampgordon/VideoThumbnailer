@@ -60,7 +60,7 @@
 				<dict>
 					<key>COMMAND_STRING</key>
 					<string>  #!/bin/bash
-  export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+  export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
   # Log to a file for debugging
   exec &gt; /tmp/automator_debug.log 2&gt;&amp;1
@@ -70,7 +70,7 @@
   echo "Python path: $(which python3)"
   echo "FFmpeg path: $(which ffmpeg)"
 
-  cd "/Users/urban/Code/VideoThumbnailer" || exit 1
+  cd "$HOME/Code/VideoThumbnailer" || exit 1
 
   for f in "$@"; do
       echo "Processing: $f"
